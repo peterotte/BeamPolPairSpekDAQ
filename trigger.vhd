@@ -40,7 +40,7 @@ architecture RTL of trigger is
 	signal DebugTrigIn : std_logic_vector(31 downto 0);
 	
 	constant BASE_TRIG_FIXED : sub_Adress 					:= x"f0" ; -- r
-	constant TRIG_FIXED : std_logic_vector(31 downto 0) := x"13021218"; 
+	constant TRIG_FIXED : std_logic_vector(31 downto 0) := x"13091919"; 
 	
 	component InputStretcher is
 	Generic (

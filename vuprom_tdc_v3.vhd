@@ -92,6 +92,7 @@ architecture rtl of vuprom_TaggerScaler is
 	constant vmead_clkstatus: std_logic_vector ( 11 downto 2) :=b"0000000000";
 	constant vmead_ymdt: std_logic_vector ( 11 downto 2) :=b"0000000001";
 	constant vmead_version: std_logic_vector ( 11 downto 2) :=b"0000000010";
+	constant vmeModuleModus: std_logic_vector ( 11 downto 2) :=b"0000000100";
 	signal vme_clkrst : std_logic_vector ( 1 downto 0);
 	signal vme_clkstatus: std_logic_vector(1 downto 0);
 	signal top_data_o: std_logic_vector(31 downto 0);
@@ -237,12 +238,20 @@ architecture rtl of vuprom_TaggerScaler is
 	constant SCCH: integer := 32*4; --For inputs IN1, IN2, INOUT1, and AdditionalCountersOut
 	constant SCBit: integer := 32;
 	--
+	
+	signal DAQTriggerDisableInput, MoellerDAQEnableInput : std_logic;
+	signal scal_pre_gate, scal_D_pre_gate, scal_U_pre_gate : std_logic;
+	signal HelicityPosInput, HelicityInhibitInput : std_logic;
+	signal HelSignalInhibit, HelNegSignalInhibit : std_logic;
+	signal ModuleModus : std_logic; --0 = PairSpec 1= Moeller
+	
 
 	--from here different for u and d
 	signal scal_data_oD : std_logic_vector(31 downto 0);
 	signal scal_in : std_logic_vector(SCCH-1 downto 0);
 	signal scal_oecsrD : std_logic;
 	signal scal_ckcsrD : std_logic;
+	signal scal_GateD : std_logic;
 	
 	component scaler
 		generic ( 
@@ -269,18 +278,16 @@ architecture rtl of vuprom_TaggerScaler is
 	signal scal_data_oU : std_logic_vector(31 downto 0);
 	signal scal_oecsrU : std_logic;
 	signal scal_ckcsrU : std_logic;
+	signal scal_GateU : std_logic;
 
 	--+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++--
 	--     SCALER open
 	--+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++--
 
 	signal scal_data_oO : std_logic_vector(31 downto 0);
-	signal scal_inO : std_logic_vector(SCCH-1 downto 0);
 	signal scal_oecsrO : std_logic;
 	signal scal_ckcsrO : std_logic;
-
-
-
+	signal scal_GateO : std_logic;
 
 	--+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++--
 	--     TRIGGER
@@ -465,9 +472,11 @@ begin ---- BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN -------
 	process(clk50, top_ckcsr, u_ad_reg)
 	begin
 		if (clk50'event and clk50 ='1') then
+			vme_clkrst(1) <='0';
 			if (top_ckcsr='1' and u_ad_reg(11 downto 2)=vmead_clkstatus) then
 					vme_clkrst(1) <= u_dat_in(1);
-			else vme_clkrst(1) <='0';
+			elsif (top_ckcsr='1' and u_ad_reg(11 downto 2)=vmeModuleModus) then
+					ModuleModus <= u_dat_in(0);
 			end if;
 		end if;
 		vme_clkrst(0)<='0';
@@ -477,12 +486,16 @@ begin ---- BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN -------
 		process(clk50, top_oecsr, u_ad_reg)
 		begin
    		if (clk50'event and clk50 ='1') then
+				top_data_o <= (others => '0');
     			if (top_oecsr='1' and u_ad_reg(11 downto 2)=vmead_clkstatus) then 
 							top_data_o <= EXT(vme_clkstatus,32); 
 	    		elsif (top_oecsr='1' and u_ad_reg(11 downto 2)=vmead_ymdt) then 
 							top_data_o <= ymdt;
 	    		elsif (top_oecsr='1' and u_ad_reg(11 downto 2)=vmead_version) then 
 							top_data_o <= version;
+	    		elsif (top_oecsr='1' and u_ad_reg(11 downto 2)=vmeModuleModus) then 
+							top_data_o(1) <= ModuleModus;
+							
 --	    		elsif (oecsr='1' and u_ad_reg(15 downto 4)=x"300" 
 --					and u_ad_reg(3 downto 2)=b"10") then 
 --							top_data_o <= tdcsetting;
@@ -581,34 +594,13 @@ begin ---- BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN -------
 
 	OU1X( 32 downto 1)   <= vhdc_out ( 31 downto 0);
 	PGIO4X( 32 downto 1) <= vhdc_out ( 63 downto 32);
---	PGIO2X( 32 downto 1) <= vhdc_out ( 63 downto 32);
---	PGIO3X( 32 downto 1) <= vhdc_out ( 95 downto 64);
---	PGIO4X( 32 downto 1) <= vhdc_out ( 127 downto 96);
 
---	LEMONIM<= tdc_tst_stop_o or trig_allor;
---	LEMONIM<= tdc_tst_stop_o or LEMIN1;
-
-
---	vhdc_out <= tdc_tst_start_o or trig_out;
-
-	--vhdc_out <= trig_out(63 downto 32)&vmeaccess_out;
 	vhdc_out <= trig_out;
 
--- tdc i/o
---	tdc_start( 127 downto 0)  <= vhdc_in( 127 downto 0) ;
-
-----	tdc_stop <= LEMIN1;
-----  tdc_clr <= '0';
-----	tdc_en <= '1';
---	tdc_selrnd <= CON(7);
-
-
 -- scaler i/o
-	--scal_in(32*4-1 downto 0) <= (others => '0'); --vhdc_in(63 downto 0) ;
-	scal_in <= AdditionalCountersOut &
-		PGIO1X ( 32 downto 1) & IN2X ( 32 downto 1) & IN1X (32 downto 1); --PGIO3X ( 32 downto 1) &
+	scal_in <= PGIO1X ( 32 downto 1) & IN3X ( 32 downto 1) & IN2X ( 32 downto 1) & IN1X (32 downto 1);
 
-	Delayboxes: for i in 0 to 3*32-1 generate --IN1 and IN2 and INOUT1
+	Delayboxes: for i in 0 to 4*32-1 generate --IN1, IN2, IN3 and INOUT1
 	begin
 		delay_by_shiftregister_1: delay_by_shiftregister Generic MAP (	DELAY => 27 ) --Delay correct: 33, 9.10.2012
 			 Port Map ( CLK => clk200,
@@ -616,7 +608,6 @@ begin ---- BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN -------
 					  DELAY_OUT => scal_in_delayed(i)
 			);
 	end generate;
-	scal_in_delayed(SCCH-1 downto 3*32) <= scal_in(SCCH-1 downto 3*32); --AdditionalCountersOut are undelayed
 	
 --	delay_GateSignal: delay_by_shiftregister Generic MAP ( DELAY => 1) --not less then 1!
 --		Port Map ( CLK => clk200,
@@ -632,6 +623,26 @@ begin ---- BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN -------
 				  SIG_IN => ScalerGate_Delayed,
 				  GATE_OUT => ScalerGate_DelayedStreched
 		);
+		
+	
+	DAQTriggerDisableInput <= PGIO3X(17);
+	MoellerDAQEnableInput <= PGIO3X(18);
+	
+	HelicityPosInput <= PGIO3X(2);
+	HelicityInhibitInput <= PGIO3X(4);
+	
+	scal_pre_gate <= scal_GateO when ModuleModus = '0' else MoellerDAQEnableInput;
+	
+	HelSignalInhibit <= HelicityPosInput and (not HelicityInhibitInput);
+	HelNegSignalInhibit <= (not HelicityPosInput) and (not HelicityInhibitInput);
+	
+	scal_D_pre_gate <= ScalerGate_DelayedStreched when ModuleModus = '0' else HelSignalInhibit;
+	scal_U_pre_gate <= ScalerGate_DelayedStreched when ModuleModus = '0' else HelNegSignalInhibit;
+	
+	scal_GateO <= not DAQTriggerDisableInput;
+	scal_GateD <= scal_pre_gate and scal_D_pre_gate;
+	scal_GateU <= scal_pre_gate and scal_U_pre_gate;
+	
 		
 	--Select Signals for Oszi:
 	Oszi_SignalsIN(32*4-1 downto 0) <= scal_in;
@@ -677,7 +688,7 @@ begin ---- BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN -------
 		port map (
 			clkl=>clk50, clkh => clk200,
 			scal_in=>scal_in_delayed, 
-			ScalerGate => ScalerGate_DelayedStreched, --PGIO3X(32),
+			ScalerGate => scal_GateD,
 			u_ad_reg=>u_ad_reg(11 downto 2), 
 			u_dat_in=>u_dat_in, 
 			u_data_o=>scal_data_oD,
@@ -711,7 +722,7 @@ begin ---- BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN -------
 		port map (
 			clkl=>clk50, clkh => clk200,
 			scal_in=>scal_in, 
-			ScalerGate => ScalerGate_DelayedStreched, --PGIO3X(32),
+			ScalerGate => scal_GateU,
 			u_ad_reg=>u_ad_reg(11 downto 2), 
 			u_dat_in=>u_dat_in, 
 			u_data_o=>scal_data_oU,
@@ -746,7 +757,7 @@ begin ---- BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN -------
 		port map (
 			clkl=>clk50, clkh => clk200,
 			scal_in=>scal_in, 
-			ScalerGate => '1',
+			ScalerGate => scal_GateO,
 			u_ad_reg=>u_ad_reg(11 downto 2), 
 			u_dat_in=>u_dat_in, 
 			u_data_o=>scal_data_oO,

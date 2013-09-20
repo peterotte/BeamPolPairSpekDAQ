@@ -13,9 +13,6 @@ entity trigger is
 		clock400 : in STD_LOGIC; 
 		trig_in : in STD_LOGIC_VECTOR (191 downto 0);
 		trig_out : out STD_LOGIC_VECTOR (63 downto 0);
-		scal_in : in STD_LOGIC_VECTOR (4*32-1 downto 0);
-		ScalerGate_Delayed : in STD_LOGIC;
-		ScalerGate_DelayedStreched : in STD_LOGIC;
 		nim_in   : in  STD_LOGIC;
 		nim_out  : out STD_LOGIC;
 		led	     : out STD_LOGIC_VECTOR(8 downto 1); -- 8 LEDs onboard
@@ -40,7 +37,7 @@ architecture RTL of trigger is
 	signal DebugTrigIn : std_logic_vector(31 downto 0);
 	
 	constant BASE_TRIG_FIXED : sub_Adress 					:= x"f0" ; -- r
-	constant TRIG_FIXED : std_logic_vector(31 downto 0) := x"13091919"; 
+	constant TRIG_FIXED : std_logic_vector(31 downto 0) := x"1309201a"; 
 	
 	component InputStretcher is
 	Generic (
@@ -52,9 +49,6 @@ architecture RTL of trigger is
 		);
 	end component;
 	
-	
-
-	signal TaggerOR, TaggerOR_delayed : std_logic_vector(5 downto 0);
 	
 	---------------------------------------------------------------------------------
 	-- Signals to/from MAMI to control the electron source
@@ -133,27 +127,8 @@ begin
 				PORT MAP (clock=>clock200,Input=>AdditionalCountersOut_Intermediate(i+4),Output=>AdditionalCountersOut_Intermediate(i+8));
 	end generate;
 	
-	TaggerORs1: for i in 0 to 3 generate --IN1 and IN2
-		begin
-			TaggerOR_1: TaggerOR(i) <= '1' when (trig_in(i*16+15 downto i*16) /= "0") else '0';
-	end generate;
-	TaggerORs2: for i in 6 to 7 generate --INOUT1
-		begin
-			TaggerOR_2: TaggerOR(i-2) <= '1' when (trig_in(i*16+15 downto i*16) /= "0") else '0';
-	end generate;
-
-	TaggerORsDelayed1: for i in 0 to 5 generate --IN1 and IN2 and INOUT 1
-		begin
-			TaggerORDelayed_1: TaggerOR_delayed(i) <= '1' when (scal_in(i*16+15 downto i*16) /= "0") else '0';
-	end generate;
-	
-	
-	AdditionalCountersOut_Intermediate(17 downto 12) <= TaggerOR;
-	AdditionalCountersOut_Intermediate(23 downto 18) <= TaggerOR_delayed;
-	AdditionalCountersOut_Intermediate(28 downto 24) <= (others => '0');
+	AdditionalCountersOut_Intermediate(28 downto 18) <= (others => '0');
 	AdditionalCountersOut_Intermediate(29) <= trig_in(31+32*5);
-	AdditionalCountersOut_Intermediate(30) <= ScalerGate_Delayed;
-	AdditionalCountersOut_Intermediate(31) <= ScalerGate_DelayedStreched;
 
 	AdditionalCountersOut <= AdditionalCountersOut_Intermediate;
 	trig_out(31 downto 0) <= AdditionalCountersOut_Intermediate;

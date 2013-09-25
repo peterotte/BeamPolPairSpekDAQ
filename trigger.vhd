@@ -35,20 +35,9 @@ architecture RTL of trigger is
 
 	constant BASE_TRIG_DebugTrigIn : sub_Adress    		:= x"0f"; -- r/w
 	signal DebugTrigIn : std_logic_vector(31 downto 0);
-	
 	constant BASE_TRIG_FIXED : sub_Adress 					:= x"f0" ; -- r
-	constant TRIG_FIXED : std_logic_vector(31 downto 0) := x"1309201a"; 
-	
-	component InputStretcher is
-	Generic (
-		Duration : integer := 1		);
-		PORT (
-			Clock : in STD_LOGIC;
-			Input : in STD_LOGIC;
-			Output : out STD_LOGIC
-		);
-	end component;
-	
+	constant TRIG_FIXED : std_logic_vector(31 downto 0) := x"1309201b"; 
+
 	
 	---------------------------------------------------------------------------------
 	-- Signals to/from MAMI to control the electron source
@@ -56,54 +45,14 @@ architecture RTL of trigger is
 	signal MAMIElectronSourceSetting : std_logic_vector(3 downto 0);
 	---------------------------------------------------------------------------------
 
-	---------------------------------------------------------------------------------
-	-- Signals for MAMI e- flux counting
-	---------------------------------------------------------------------------------
-	component Prescaler is
-		 Generic (
-				Factor : integer );
-		 Port ( clock : in  STD_LOGIC;
-				  Input : in  STD_LOGIC;
-				Output : out  STD_LOGIC);
-	end component;
-	signal AdditionalCountersOut_Intermediate : std_logic_vector(31 downto 0);
-	signal clock5 : std_logic;
-	signal GateActive, GateActive1, OldClock5 : std_logic;
-	---------------------------------------------------------------------------------
 begin
-	Prescaler_SlowClock: Prescaler GENERIC MAP (Factor => 25) 
-		PORT MAP (clock=>clock100,INPUT=>clock50,OUTPUT=>clock5);
-
 	------------------------------------------------------------------------------------------------
 	-- show the actual status of the machine using leds
 	led(6 downto 1) <= not x"0f";
-	led(7) <= not GateActive1;
-	led(8) <= not clock5;
+	led(8 downto 7) <= "00";
 	pgxled(8 downto 1) <= not x"33";
 
-	---------------------------------------------------------------
-	-- Detect whether a Gate signal occured and let the led blink
-	---------------------------------------------------------------
-	process (clock100, AdditionalCountersOut_Intermediate(31))
-	begin
-		if rising_edge(clock100) then
-			if AdditionalCountersOut_Intermediate(31) = '1' then
-				GateActive <= '1';
-			end if;
-			
-			OldClock5 <= clock5;
-			
-			if (OldClock5 = '0') and (clock5 = '1') then
-				GateActive <= '0';
-			end if;
-		end if;
-	end process;
-	process (clock5)
-	begin
-		if rising_edge(clock5) then
-			GateActive1 <= GateActive;
-		end if;
-	end process;
+
 	------------------------------------------------------------------------------------------------
 	
 	---------------------------------------------------------------------------------
@@ -115,23 +64,7 @@ begin
 	-- Pin 3 = inhibit, if set, status of source is indetermined
 	MAMIElectronSourceSetting <= trig_in(3+32*5 downto 0+32*5); 
 	---------------------------------------------------------------------------------
-	
-	AdditionalCountersOut_Intermediate(3 downto 0) <= MAMIElectronSourceSetting;
-	
-	Counters: for i in 0 to 3 generate 
-		begin
-			Timer_1: AdditionalCountersOut_Intermediate(i+4) <= 
-				clock100 when (MAMIElectronSourceSetting(i) = '1') else '0';
-
-			Prescaler_1: Prescaler GENERIC MAP (Factor=>8) 
-				PORT MAP (clock=>clock200,Input=>AdditionalCountersOut_Intermediate(i+4),Output=>AdditionalCountersOut_Intermediate(i+8));
-	end generate;
-	
-	AdditionalCountersOut_Intermediate(28 downto 18) <= (others => '0');
-	AdditionalCountersOut_Intermediate(29) <= trig_in(31+32*5);
-
-	AdditionalCountersOut <= AdditionalCountersOut_Intermediate;
-	trig_out(31 downto 0) <= AdditionalCountersOut_Intermediate;
+		
 	
 	---------------------------------------------------------------------------------------------------------	
 	-- Code for VME handling / access

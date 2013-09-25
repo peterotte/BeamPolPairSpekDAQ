@@ -77,6 +77,7 @@ end vuprom_TaggerScaler;
 
 
 architecture rtl of vuprom_TaggerScaler is
+   attribute keep : string;
 
 	--+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++--
 	--     VME access 
@@ -140,25 +141,24 @@ architecture rtl of vuprom_TaggerScaler is
 
 	COMPONENT vme_access
 	  generic (
-		 BASE_AD : std_logic_vector( 23 downto 20) := csr_ad
-														 -- VME base address D23 to D 20
+		 BASE_AD : std_logic_vector( 23 downto 20) := csr_ad  -- VME base address D23 to D 20
 		 );
 	  Port ( AD : inout  STD_LOGIC_VECTOR (31 downto 0);
-				VME_Reset : in std_logic;
-				  ASI : in  STD_LOGIC;
-				  WRI : in  STD_LOGIC;
-				  DS0I : in  STD_LOGIC;
-				  DS1I : in  STD_LOGIC;
-				  CON : inout  STD_LOGIC_VECTOR (15 downto 0);
-				  VN2andVN1 : out std_logic_vector(7 downto 0);
-				  CKADDR : out STD_LOGIC;
-				  WS : out STD_LOGIC;
-				  CKCSR : out  STD_LOGIC;
-				  OECSR : out  STD_LOGIC;
-				  U_AD_REG : out STD_LOGIC_VECTOR ( 31 downto 2);
-				  U_DAT_IN : in STD_LOGIC_VECTOR ( 31 downto 0);
-				  U_DAT_OUT : out STD_LOGIC_VECTOR ( 31 downto 0);
-				  CLK : in  STD_LOGIC
+			VME_Reset : in std_logic;
+			ASI : in  STD_LOGIC;
+			WRI : in  STD_LOGIC;
+			DS0I : in  STD_LOGIC;
+			DS1I : in  STD_LOGIC;
+			CON : inout  STD_LOGIC_VECTOR (15 downto 0);
+			VN2andVN1 : out std_logic_vector(7 downto 0);
+			CKADDR : out STD_LOGIC;
+			WS : out STD_LOGIC;
+			CKCSR : out  STD_LOGIC;
+			OECSR : out  STD_LOGIC;
+			U_AD_REG : out STD_LOGIC_VECTOR ( 31 downto 2);
+			U_DAT_IN : in STD_LOGIC_VECTOR ( 31 downto 0);
+			U_DAT_OUT : out STD_LOGIC_VECTOR ( 31 downto 0);
+			CLK : in  STD_LOGIC
 		);
 	END COMPONENT;
 
@@ -240,31 +240,36 @@ architecture rtl of vuprom_TaggerScaler is
 	signal HelicityPosInput, HelicityInhibitInput : std_logic;
 	--Gates for Scalers
 	signal scal_Gate_Open, scal_Gate_PairSpec, scal_Gate_HelP, scal_Gate_HelN : std_logic;
+	attribute keep of scal_Gate_PairSpec : signal is "TRUE";
 	--intermediate signals
 	signal HelSignalInhibit, HelNegSignalInhibit : std_logic;
-
+	
 	signal scal_data_o_O, scal_data_o_OEPT, scal_data_o_D, scal_data_o_U, scal_data_o_MP, scal_data_o_MN, scal_data_o_Mon : std_logic_vector(31 downto 0);
 	
 	signal scal_oecsr_O, scal_oecsr_OEPT, scal_oecsr_D, scal_oecsr_U, scal_oecsr_MP, scal_oecsr_MN, scal_oecsr_Mon : std_logic;
 	signal scal_ckcsr_O, scal_ckcsr_OEPT, scal_ckcsr_D, scal_ckcsr_U, scal_ckcsr_MP, scal_ckcsr_MN, scal_ckcsr_Mon : std_logic;
 	
 	constant SCBit: integer := 32;
-	constant SCCH128: integer := 32*4; --For open Tagger, Pair Spec delayed, Pair Spec undelayed
+	constant SCCH96: integer := 32*3; --For open Tagger, Pair Spec delayed, Pair Spec undelayed
 	constant SCCH32: integer := 32; -- open EPT, Online Monitor
 	constant SCCH8: integer := 8; -- Moeller pol hel, neg hel
-	signal scal_in_O, scal_in_D, scal_in_U : std_logic_vector(SCCH128-1 downto 0);
+	signal scal_in_O, scal_in_D : std_logic_vector(SCCH96-1 downto 0);
+	attribute keep of scal_in_O : signal is "TRUE";
+	attribute keep of scal_in_D : signal is "TRUE";
+
 	signal scal_in_OEPT, scal_in_Mon : std_logic_vector(SCCH32-1 downto 0);
 	signal scal_in_MP, scal_in_MN : std_logic_vector(SCCH8-1 downto 0);
+	attribute keep of scal_in_Mon : signal is "TRUE";
 	
 	component scaler
 		generic ( 
-			NCh : integer; -- := SCCH128
+			NCh : integer; -- := SCCH96
 			NBit : integer := SCBit
 			);  
 		port (
 			clkl : in STD_LOGIC;
 			clkh : in STD_LOGIC;		
-			--scal_in : in STD_LOGIC_VECTOR ( (SCCH128-1) downto 0);				
+			--scal_in : in STD_LOGIC_VECTOR ( (SCCH96-1) downto 0);				
 			scal_in : in STD_LOGIC_VECTOR ( (NCh-1) downto 0);				
 			ScalerGate : in std_logic;
 			--............. vme interface .............
@@ -287,6 +292,7 @@ architecture rtl of vuprom_TaggerScaler is
 	signal AdditionalCountersOut : std_logic_vector(31 downto 0);
 	signal PairSpecSignal, PairSpecSignal_Streched : std_logic;
 	signal TaggerOR : std_logic_vector(7 downto 0);
+	attribute keep of TaggerOR : signal is "TRUE";
 
 
 	component trigger
@@ -352,7 +358,7 @@ architecture rtl of vuprom_TaggerScaler is
 				  DELAY_OUT : out  STD_LOGIC);
 	end component;
 	
-	signal scal_in_delayed : std_logic_vector(SCCH128-1 downto 0);
+	signal scal_in_delayed : std_logic_vector(SCCH96-1 downto 0);
 	
 	component gate_by_shiftreg is
 		Generic (
@@ -400,23 +406,23 @@ begin ---- BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN -------
 	
 	
 	vme_access_1: vme_access PORT MAP(
-			AD => AD,
-			VME_Reset => VMEAccess_Reset,
-				ASI => ASI,
-           WRI => WRI,
-           DS0I => DS0I,
-           DS1I => DS1I,
-           CON => CON,
-			  VN2andVN1 => VN2andVN1,
-			 CKADDR => ckaddr,
-			 WS => ws,
-				CKCSR => ckcsr,
-           OECSR => oecsr,
-			  U_AD_REG => u_ad_reg,
-			  U_DAT_IN => din,
-			  U_DAT_OUT => u_dat_in,
-           CLK =>clk50
-			  );
+		AD => AD,
+		VME_Reset => VMEAccess_Reset,
+		ASI => ASI,
+		WRI => WRI,
+		DS0I => DS0I,
+		DS1I => DS1I,
+		CON => CON,
+		VN2andVN1 => VN2andVN1,
+		CKADDR => ckaddr,
+		WS => ws,
+		CKCSR => ckcsr,
+		OECSR => oecsr,
+		U_AD_REG => u_ad_reg,
+		U_DAT_IN => din,
+		U_DAT_OUT => u_dat_in,
+		CLK =>clk50
+	);
 
 	--VMEAccess_Reset <= LEMIN1;
 	VMEAccess_Reset <= '0';
@@ -591,10 +597,9 @@ begin ---- BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN -------
 -- scaler i/o
 
 	-- Tagger
-	scal_in_O <= PGIO1X ( 32 downto 1) & IN3X ( 32 downto 1) & IN2X ( 32 downto 1) & IN1X (32 downto 1);
-	scal_in_U <= scal_in_O;
+	scal_in_O <= IN3X ( 32 downto 1) & IN2X ( 32 downto 1) & IN1X (32 downto 1); --free:PGIO2X ( 32 downto 1)
 
-	Delayboxes: for i in 0 to 4*32-1 generate --IN1, IN2, IN3 and INOUT1
+	Delayboxes: for i in 0 to 3*32-1 generate --IN1, IN2, IN3
 	begin
 		delay_by_shiftregister_1: delay_by_shiftregister Generic MAP (	DELAY => 27 ) --Delay correct: 33, 9.10.2012
 			 Port Map ( CLK => clk200,
@@ -604,13 +609,17 @@ begin ---- BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN -------
 	end generate;
 	
 	--Tagger OR
-	TaggerORs1: for i in 0 to 7 generate
+	TaggerORs1: for i in 0 to 5 generate
 		begin
 			TaggerOR_1: TaggerOR(i) <= '1' when (scal_in_O(i*16+15 downto i*16) /= "0") else '0';
 	end generate;
+	TaggerORsEPT: for i in 0 to 1 generate
+		begin
+			EPTTaggerOR_1: TaggerOR(i+6) <= '1' when (scal_in_OEPT(i*16+15 downto i*16) /= "0") else '0';
+	end generate;
 
 	-- EPT
-	scal_in_OEPT <= PGIO2X;
+	scal_in_OEPT <= PGIO1X;
 	
 	
 	--PairSpec
@@ -637,7 +646,7 @@ begin ---- BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN -------
 	
 	--Mon
 	scal_in_Mon(7 downto 0) <= TaggerOR;
-	scal_in_Mon(31 downto 8) <= (others => '0');
+	scal_in_Mon(31 downto 8) <= PGIO3X(24 downto 1);
 	
 	--Gates
 	scal_Gate_Open <= not DAQTriggerDisableInput;
@@ -650,8 +659,8 @@ begin ---- BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN -------
 	
 		
 	--Select Signals for Oszi:
-	Oszi_SignalsIN(32*4-1 downto 0) <= scal_in_O;
-	Oszi_SignalsIN(32*4+32*1-1 downto 32*4) <= scal_in_D(32*1-1 downto 0);
+	Oszi_SignalsIN(32*3-1 downto 0) <= scal_in_O;
+	Oszi_SignalsIN(32*3+32*1-1 downto 32*3) <= scal_in_D(32*1-1 downto 0);
 	Oszi_SignalsIN(225) <= PairSpecSignal; --original Gate signal
 	Oszi_SignalsIN(226) <= PairSpecSignal_Streched; --Gate to Scalers
 
@@ -688,16 +697,16 @@ begin ---- BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN -------
 	--     SCALER
 	--+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++--
 
-	scaler_O:    scaler generic map ( NCh => SCCH128 ) port map ( clkl=>clk50, clkh => clk200, scal_in=>scal_in_O, ScalerGate => scal_Gate_Open, 
+	scaler_O:    scaler generic map ( NCh => SCCH96 ) port map ( clkl=>clk50, clkh => clk200, scal_in=>scal_in_O, ScalerGate => scal_Gate_Open, 
 			u_ad_reg=>u_ad_reg(11 downto 2), u_dat_in=>u_dat_in, u_data_o=>scal_data_o_O, oecsr=>scal_oecsr_O, ckcsr=>scal_ckcsr_O );
 			
 	scaler_OEPT: scaler generic map ( NCh => SCCH32  ) port map ( clkl=>clk50, clkh => clk200, scal_in=>scal_in_OEPT, ScalerGate => scal_Gate_Open, 
 			u_ad_reg=>u_ad_reg(11 downto 2), u_dat_in=>u_dat_in, u_data_o=>scal_data_o_OEPT, oecsr=>scal_oecsr_OEPT, ckcsr=>scal_ckcsr_OEPT );
 			
-	scaler_D:    scaler generic map ( NCh => SCCH128 ) port map ( clkl=>clk50, clkh => clk200, scal_in=>scal_in_D, ScalerGate => scal_Gate_PairSpec, 
+	scaler_D:    scaler generic map ( NCh => SCCH96 ) port map ( clkl=>clk50, clkh => clk200, scal_in=>scal_in_D, ScalerGate => scal_Gate_PairSpec, 
 			u_ad_reg=>u_ad_reg(11 downto 2), u_dat_in=>u_dat_in, u_data_o=>scal_data_o_D, oecsr=>scal_oecsr_D, ckcsr=>scal_ckcsr_D );
 			
-	scaler_U:    scaler generic map ( NCh => SCCH128 ) port map ( clkl=>clk50, clkh => clk200, scal_in=>scal_in_U, ScalerGate => scal_Gate_PairSpec, 
+	scaler_U:    scaler generic map ( NCh => SCCH96 ) port map ( clkl=>clk50, clkh => clk200, scal_in=>scal_in_O, ScalerGate => scal_Gate_PairSpec, 
 			u_ad_reg=>u_ad_reg(11 downto 2), u_dat_in=>u_dat_in, u_data_o=>scal_data_o_U, oecsr=>scal_oecsr_U, ckcsr=>scal_ckcsr_U );
 			
 	scaler_MP:   scaler generic map ( NCh => SCCH8   ) port map ( clkl=>clk50, clkh => clk200, scal_in=>scal_in_MP, ScalerGate => scal_Gate_HelP, 
@@ -706,7 +715,7 @@ begin ---- BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN -------
 	scaler_MN:   scaler generic map ( NCh => SCCH8   ) port map ( clkl=>clk50, clkh => clk200, scal_in=>scal_in_MN, ScalerGate => scal_Gate_HelN, 
 			u_ad_reg=>u_ad_reg(11 downto 2), u_dat_in=>u_dat_in, u_data_o=>scal_data_o_MN, oecsr=>scal_oecsr_MN, ckcsr=>scal_ckcsr_MN );
 			
-	scaler_Mon:  scaler generic map ( NCh => SCCH32  ) port map ( clkl=>clk50, clkh => clk200, scal_in=>scal_in_Mon, ScalerGate => '1', 
+	scaler_Mon:  scaler generic map ( NCh => SCCH32  ) port map ( clkl=>clk50, clkh => clk100, scal_in=>scal_in_Mon, ScalerGate => '1', 
 			u_ad_reg=>u_ad_reg(11 downto 2), u_dat_in=>u_dat_in, u_data_o=>scal_data_o_Mon, oecsr=>scal_oecsr_Mon, ckcsr=>scal_ckcsr_Mon );
 	
 	

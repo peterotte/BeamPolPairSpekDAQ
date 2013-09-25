@@ -715,3 +715,17 @@ NET "OsziHisto_1/SelectedSignals*" TIG;
 #needed for OsziHisto END
 
 
+NET "scal_Gate_PairSpec*" TIG;
+
+NET "scaler_O/count_fix*" TIG;
+NET "scaler_D/count_fix*" TIG;
+NET "scaler_U/count_fix*" TIG;
+
+NET "scal_in_O*" TIG;
+NET "scal_in_D*" TIG;
+
+NET "TaggerOR*" TIG;
+
+#NET "scal_in_Mon*" TIG;
+
+

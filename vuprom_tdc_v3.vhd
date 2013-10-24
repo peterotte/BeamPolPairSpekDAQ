@@ -639,7 +639,7 @@ begin ---- BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN -------
 	
 	--Mon
 	scal_in_Mon(7 downto 0) <= TaggerOR;
-	scal_in_Mon(31 downto 8) <= PGIO3X(24 downto 1);
+	scal_in_Mon(31 downto 8) <= clk50& PGIO3X(23 downto 1);
 	
 	--Gates
 	scal_Gate_Open <= not DAQTriggerDisableInput;

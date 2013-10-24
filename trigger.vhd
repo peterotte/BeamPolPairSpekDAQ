@@ -38,7 +38,7 @@ architecture RTL of trigger is
 
 	constant BASE_TRIG_FIXED : sub_Address 					:= x"f0" ; -- r
 	constant BASE_TRIG_SelectedInput_Base : sub_Address 	:= "10000000" ; -- r/w, only bit 11 and bit 10 is used
-	constant TRIG_FIXED : std_logic_vector(31 downto 0) := x"1309261e"; 
+	constant TRIG_FIXED : std_logic_vector(31 downto 0) := x"1310241f"; 
 
 	--IN1..IO1 Mask
 	constant BASE_TRIG_IN1Mask : sub_Address    		:= x"10"; -- r/w

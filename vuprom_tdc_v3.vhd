@@ -120,10 +120,10 @@ architecture rtl of vuprom_TaggerScaler is
 	constant scal_base_D    : std_logic_vector(7 downto 0) :=x"12";
 	constant scal_base_U    : std_logic_vector(7 downto 0) :=x"13";
 	constant scal_base_Mon  : std_logic_vector(7 downto 0) :=x"14";
+	constant scal_base_DAQMon  : std_logic_vector(7 downto 0) :=x"15";
 	constant trig_base      : std_logic_vector(7 downto 0) :=x"02";
 	constant top_base       : std_logic_vector(7 downto 0) :=x"04"; 
 	constant disp_base      : std_logic_vector(7 downto 0) :=x"05"; 
-	constant oszihisto_base : std_logic_vector(7 downto 0) :=x"0a";	
 
 	-- vme bus control signals
 	signal ckcsr		: std_logic;	 -- internal CSR
@@ -168,7 +168,7 @@ architecture rtl of vuprom_TaggerScaler is
 --+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++--
 --     CLOCK 
 --+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++--
-	signal clk50, clk100, clk200, clk400: std_logic;
+	signal clk50, clk100, clk200, clk400, clk1 : std_logic;
 	signal clk_rst, clk_locked: std_logic_vector ( 3 downto 0);
 
 	COMPONENT clock_boost
@@ -180,7 +180,9 @@ architecture rtl of vuprom_TaggerScaler is
 		CLK50MHz_OUT : OUT std_logic;
 		CLK100MHz_OUT : OUT std_logic;
 		CLK200MHz_OUT : OUT std_logic;
-		CLK400MHz_OUT : OUT std_logic
+		CLK400MHz_OUT : OUT std_logic;
+		clock1MHz_OUT : out  STD_LOGIC;
+		clock0_5Hz_OUT : out  STD_LOGIC
 		);
 	END COMPONENT;
  
@@ -234,27 +236,25 @@ architecture rtl of vuprom_TaggerScaler is
 	--     SCALER
 	--+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++--
 
-	signal DAQTriggerDisableInput, MoellerDAQEnableInput : std_logic;
-	signal HelicityPosInput, HelicityInhibitInput : std_logic;
 	--Gates for Scalers
 	signal scal_Gate_Open, scal_Gate_PairSpec : std_logic;
 	attribute keep of scal_Gate_PairSpec : signal is "TRUE";
 	--intermediate signals
-	signal HelSignalInhibit, HelNegSignalInhibit : std_logic;
+	signal scal_data_o_O, scal_data_o_OEPT, scal_data_o_D, scal_data_o_U, scal_data_o_Mon, scal_data_o_DAQMon : std_logic_vector(31 downto 0);
 	
-	signal scal_data_o_O, scal_data_o_OEPT, scal_data_o_D, scal_data_o_U, scal_data_o_Mon : std_logic_vector(31 downto 0);
-	
-	signal scal_oecsr_O, scal_oecsr_OEPT, scal_oecsr_D, scal_oecsr_U, scal_oecsr_Mon : std_logic;
-	signal scal_ckcsr_O, scal_ckcsr_OEPT, scal_ckcsr_D, scal_ckcsr_U, scal_ckcsr_Mon : std_logic;
+	signal scal_oecsr_O, scal_oecsr_OEPT, scal_oecsr_D, scal_oecsr_U, scal_oecsr_Mon, scal_oecsr_DAQMon : std_logic;
+	signal scal_ckcsr_O, scal_ckcsr_OEPT, scal_ckcsr_D, scal_ckcsr_U, scal_ckcsr_Mon, scal_ckcsr_DAQMon : std_logic;
 	
 	constant SCBit: integer := 32;
 	constant SCCH96: integer := 32*3; --For open Tagger, Pair Spec delayed, Pair Spec undelayed
-	constant SCCH32: integer := 32; -- open EPT, Online Monitor
+	constant SCCH32: integer := 32; -- open EPT
+	constant SCCHMon: integer := 16; -- Online Monitor
 	signal scal_in_O, scal_in_D : std_logic_vector(SCCH96-1 downto 0);
 	attribute keep of scal_in_O : signal is "TRUE";
 	attribute keep of scal_in_D : signal is "TRUE";
 
-	signal scal_in_OEPT, scal_in_Mon : std_logic_vector(SCCH32-1 downto 0);
+	signal scal_in_OEPT : std_logic_vector(SCCH32-1 downto 0);
+	signal scal_in_Mon : std_logic_vector(SCCHMon-1 downto 0);
 	attribute keep of scal_in_Mon : signal is "TRUE";
 	
 	component scaler
@@ -284,6 +284,7 @@ architecture rtl of vuprom_TaggerScaler is
 	signal trig_out : std_logic_vector( 63 downto 0);
 	signal trig_oecsr : std_logic;
 	signal trig_ckcsr : std_logic;
+	signal DebugSignals : std_logic_vector(255 downto 0);
 	signal AdditionalCountersOut : std_logic_vector(31 downto 0);
 	signal PairSpecSignal, PairSpecSignal_Streched : std_logic;
 	signal TaggerOR : std_logic_vector(7 downto 0);
@@ -298,6 +299,7 @@ architecture rtl of vuprom_TaggerScaler is
 			clock100 : in STD_LOGIC;
 			clock200 : in STD_LOGIC;
 			clock400 : in STD_LOGIC;
+			DebugSignals : in STD_LOGIC_VECTOR(255 downto 0);
 			Tagger_In : in STD_LOGIC_VECTOR (32*3-1 downto 0);
 			EPTagger_In : in STD_LOGIC_VECTOR (31 downto 0);
 			TaggerOR : in STD_LOGIC_VECTOR(7 downto 0);
@@ -317,34 +319,6 @@ architecture rtl of vuprom_TaggerScaler is
 			oecsr, ckcsr:in std_logic
 		);
 	end component;
-
-	--+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++--
-	--     Oszi Histo
-	--+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++--
-	signal oszihisto_data_o : std_logic_vector(31 downto 0);
-	signal oszihisto_in : std_logic_vector( 191 downto 0);
-	signal oszihisto_out : std_logic_vector( 63 downto 0);
-	signal oszihisto_oecsr : std_logic;
-	signal oszihisto_ckcsr : std_logic;
-	signal Oszi_SignalsIN: std_logic_vector(255 downto 0);
-
-	COMPONENT OsziHisto
-	PORT(
-		SignalsIN : IN std_logic_vector(255 downto 0);
-		clock200 : IN std_logic;
-		clock50 : IN std_logic;
-		OsziAcquisionRunning : OUT std_logic;
-		Debug_Out : OUT std_logic_vector(31 downto 0);
-	--............................. vme interface ....................
-		u_ad_reg : IN std_logic_vector(11 downto 2);
-		u_dat_in : IN std_logic_vector(31 downto 0);
-		u_data_o : OUT std_logic_vector(31 downto 0);
-		oecsr : IN std_logic;
-		ckcsr : IN std_logic          
-		);
-	END COMPONENT;
-
-
 
 	------------------------------------------------------------------------------------------
 	-- delay input signals
@@ -389,7 +363,9 @@ begin ---- BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN -------
 		CLK200MHz_OUT => clk200,
 		CLK400MHz_OUT => clk400,
 		CLK_LOCKED_OUT => clk_locked,
-		CLK_RST_IN => clk_rst
+		CLK_RST_IN => clk_rst,
+		clock1MHz_OUT => clk1,
+		clock0_5Hz_OUT => open
 	);
 
 	------------------------------------------------------------------------------------------
@@ -441,9 +417,6 @@ begin ---- BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN -------
 	ymdt(15 downto 8) <=  CONV_STD_LOGIC_VECTOR(DATE, 8);
 	ymdt(23 downto 16) <= CONV_STD_LOGIC_VECTOR(MONTH, 8);
 	ymdt(31 downto 24) <= CONV_STD_LOGIC_VECTOR(YEAR, 8);
---	tdcsetting(7 downto 0) <=  b"00000001";
---	tdcsetting(15 downto 8) <=  CONV_STD_LOGIC_VECTOR(TDCCH, 8);
---	tdcsetting(23 downto 16) <= CONV_STD_LOGIC_VECTOR(TDCBIT, 8);
 
 	process(clk50, oecsr, ckcsr, u_ad_reg)
 	begin
@@ -499,7 +472,7 @@ begin ---- BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN -------
 
 ----------------------- DATA  for OUTPUT to VME -------------------------------------------
 
-		process(clk50, scal_oecsr_O, scal_oecsr_OEPT, scal_oecsr_D, scal_oecsr_U, scal_oecsr_Mon, trig_oecsr, top_oecsr)
+		process(clk50, scal_oecsr_O, scal_oecsr_OEPT, scal_oecsr_D, scal_oecsr_U, scal_oecsr_Mon, scal_oecsr_DAQMon, trig_oecsr, top_oecsr)
 		begin
    			if (rising_edge(clk50)) then   
 					if (scal_oecsr_O ='1' ) then
@@ -512,6 +485,8 @@ begin ---- BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN -------
 							din <= scal_data_o_U;
 					elsif (scal_oecsr_Mon ='1' ) then
 							din <= scal_data_o_Mon;
+					elsif (scal_oecsr_DAQMon ='1' ) then
+							din <= scal_data_o_DAQMon;
 							
 					elsif (trig_oecsr ='1' ) then
 							din <= trig_data_o; 
@@ -519,8 +494,6 @@ begin ---- BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN -------
 							din <= top_data_o; 
 					elsif (disp_oecsr ='1') then
 							din <= disp_data_o;
-					elsif (oszihisto_oecsr ='1') then
-						din <= oszihisto_data_o;
 					else  	
 						din <= (others => '0');
 					end if;    
@@ -621,9 +594,12 @@ begin ---- BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN -------
 	EPTaggerInputs <= IN1IN2IN3IO1Mask(32*4-1 downto 32*3) and RawEPTaggerInputs;
 	scal_in_OEPT <= EPTaggerInputs;
 	
+	DebugSignals(32*4-1 downto 0) <= RawEPTaggerInputs&RawTaggerInputs;
+	DebugSignals(32*5-1 downto 32*4) <= PGIO3X;
+	DebugSignals(15+32*5 downto 32*5) <= scal_in_D(15 downto 0);
 	
 	--PairSpec
-	PairSpecSignal <= PGIO3X(32);
+	PairSpecSignal <= PGIO3X(7); --IO3, ch6
 		
 	gate_by_shiftreg_GateSignal_1: gate_by_shiftreg Generic MAP (
 				WIDTH => 10 --9.10.2012: Value=15 (result: gate length of 12*5ns (with 1-2*5ns jitter))
@@ -634,24 +610,17 @@ begin ---- BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN -------
 		);
 		
 	
-	DAQTriggerDisableInput <= PGIO3X(17);
-
+	DebugSignals(253 downto 253-7) <= TaggerOR;
+	DebugSignals(254) <= PairSpecSignal_Streched;
+	DebugSignals(255) <= LEMIN1; --that's the NIM
 	
 	--Mon
 	scal_in_Mon(7 downto 0) <= TaggerOR;
-	scal_in_Mon(31 downto 8) <= clk50& PGIO3X(23 downto 1);
+	scal_in_Mon(15 downto 8) <= clk1& PGIO3X(13 downto 7);
 	
 	--Gates
-	scal_Gate_Open <= not DAQTriggerDisableInput;
+	scal_Gate_Open <= LEMIN1;
 	scal_Gate_PairSpec <= scal_Gate_Open and PairSpecSignal_Streched;
-
-		
-	--Select Signals for Oszi:
-	Oszi_SignalsIN(32*3-1 downto 0) <= scal_in_O;
-	Oszi_SignalsIN(32*3+32*1-1 downto 32*3) <= scal_in_D(32*1-1 downto 0);
-	Oszi_SignalsIN(225) <= PairSpecSignal; --original Gate signal
-	Oszi_SignalsIN(226) <= PairSpecSignal_Streched; --Gate to Scalers
-
 	
 	
 	-- trigger i/o
@@ -696,8 +665,12 @@ begin ---- BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN -------
 	scaler_U:    scaler generic map ( NCh => SCCH96 ) port map ( clkl=>clk50, clkh => clk200, scal_in=>scal_in_O, ScalerGate => scal_Gate_PairSpec, 
 			u_ad_reg=>u_ad_reg(11 downto 2), u_dat_in=>u_dat_in, u_data_o=>scal_data_o_U, oecsr=>scal_oecsr_U, ckcsr=>scal_ckcsr_U );
 			
-	scaler_Mon:  scaler generic map ( NCh => SCCH32  ) port map ( clkl=>clk50, clkh => clk100, scal_in=>scal_in_Mon, ScalerGate => '1', 
+	scaler_Mon:  scaler generic map ( NCh => SCCHMon  ) port map ( clkl=>clk50, clkh => clk100, scal_in=>scal_in_Mon, ScalerGate => '1', 
 			u_ad_reg=>u_ad_reg(11 downto 2), u_dat_in=>u_dat_in, u_data_o=>scal_data_o_Mon, oecsr=>scal_oecsr_Mon, ckcsr=>scal_ckcsr_Mon );
+
+	scaler_DAQMon:  scaler generic map ( NCh => SCCHMon  ) port map ( clkl=>clk50, clkh => clk100, scal_in=>scal_in_Mon, ScalerGate => scal_Gate_Open, 
+			u_ad_reg=>u_ad_reg(11 downto 2), u_dat_in=>u_dat_in, u_data_o=>scal_data_o_DAQMon, oecsr=>scal_oecsr_DAQMon, ckcsr=>scal_ckcsr_DAQMon );
+
 	
 	
 	process(clk50, oecsr, ckcsr, u_ad_reg)
@@ -718,6 +691,9 @@ begin ---- BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN -------
 
 			if (oecsr = '1' and u_ad_reg(19 downto 12) = scal_base_Mon)  then scal_oecsr_Mon <='1'; else scal_oecsr_Mon <='0'; end if;
 			if (ckcsr = '1' and u_ad_reg(19 downto 12) = scal_base_Mon)  then scal_ckcsr_Mon <='1'; else scal_ckcsr_Mon <='0';	end if;	
+
+			if (oecsr = '1' and u_ad_reg(19 downto 12) = scal_base_DAQMon)  then scal_oecsr_DAQMon <='1'; else scal_oecsr_DAQMon <='0'; end if;
+			if (ckcsr = '1' and u_ad_reg(19 downto 12) = scal_base_DAQMon)  then scal_ckcsr_DAQMon <='1'; else scal_ckcsr_DAQMon <='0';	end if;	
 		end if;				
 	end process;
 		
@@ -731,8 +707,9 @@ begin ---- BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN -------
 			clock100=>clk100,
 			clock200=>clk200,
 			clock400=>clk400,
-			Tagger_In=>TaggerInputs,
-			EPTagger_In=>EPTaggerInputs,
+			DebugSignals => DebugSignals,
+			Tagger_In=>RawTaggerInputs,
+			EPTagger_In=>RawEPTaggerInputs,
 			TaggerOR => TaggerOR,
 			trig_out=>trig_out,
 			InputMaskOut => IN1IN2IN3IO1Mask,
@@ -767,43 +744,6 @@ begin ---- BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN -------
 		end if;				
 	end process;
 		
-
-	--+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++--
-	--     Oszi Histo
-	--+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++--
-	
-	OsziHisto_1: OsziHisto PORT MAP(
-		SignalsIN => Oszi_SignalsIN, --trig_in(3 downto 0),
-		OsziAcquisionRunning => open,
-		clock200 => clk200,
-		clock50 => clk50,
-		Debug_Out => open,
-		u_ad_reg => u_ad_reg(11 downto 2),
-		u_dat_in => u_dat_in,
-		u_data_o => oszihisto_data_o,
-		oecsr => oszihisto_oecsr,
-		ckcsr => oszihisto_ckcsr
-	);
-
-	process(clk50, oecsr, ckcsr, u_ad_reg)
-	begin
-			if (rising_edge(clk50)) then   
-
-				if (oecsr ='1' and u_ad_reg(19 downto 12)=oszihisto_base) then 
-					oszihisto_oecsr <='1';
-				else
-					oszihisto_oecsr <='0';
-				end if;
-				if (ckcsr ='1' and u_ad_reg(19 downto 12)=oszihisto_base) then 
-					oszihisto_ckcsr <='1';
-				else
-					oszihisto_ckcsr <='0';
-				end if;						
-
-			end if;				
-	end process;
-
-
 --======================================================================================================
 
 ------------------------------------------------------------------------------

@@ -698,22 +698,6 @@ TIMESPEC TS_CKFPL = PERIOD "CKFPL" 10 ns;
 #NET "trigger_1/ClockCounter_22" TNM_NET = trigger_1/ClockCounter_22;
 #TIMESPEC TS_trigger_1_ClockCounter_22 = PERIOD "trigger_1/ClockCounter_22" 20 ns HIGH 50%;
 
-# needed for OsziHisto START
-# if no functionality like ClockSpeedSelected
-# is needed, then this can be taken out
-NET "OsziHisto_1/ClockSpeedSelected*" TIG;
-NET "OsziHisto_1/SignalInShapeMode*" TIG;
-NET "OsziHisto_1/TriggerSelection*" TIG;
-NET "OsziHisto_1/VMEAddrIn*" TIG;
-NET "OsziHisto_1/VMEDataOut*" TIG;
-NET "OsziHisto_1/VMERAMClear*" TIG;
-NET "OsziHisto_1/DisarmTrigger" TIG;
-INST "OsziHisto_1/Inter_OsziAcquisionRunning" TNM = test1;
-INST "OsziHisto_1/u_data_o_0" TNM = test2;
-TIMESPEC TS_teste3 = FROM "test1" TO "test2" TIG;
-NET "OsziHisto_1/SelectedSignals*" TIG;
-#needed for OsziHisto END
-
 
 NET "scal_Gate_PairSpec*" TIG;
 

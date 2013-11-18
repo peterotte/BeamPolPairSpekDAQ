@@ -2,8 +2,8 @@ library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;																						
 use IEEE.STD_LOGIC_ARITH.ALL;
 use IEEE.STD_LOGIC_UNSIGNED.ALL;
-Library UNISIM;
-use UNISIM.vcomponents.all; --  for bufg
+--Library UNISIM;
+--use UNISIM.vcomponents.all; --  for bufg
 
 entity trigger is
 	port (
@@ -11,6 +11,7 @@ entity trigger is
 		clock100 : in STD_LOGIC;
 		clock200 : in STD_LOGIC;
 		clock400 : in STD_LOGIC; 
+		DebugSignals : in std_LOGIC_VECTOR(255 downto 0);
 		Tagger_In : in STD_LOGIC_VECTOR (32*3-1 downto 0);
 		EPTagger_In : in STD_LOGIC_VECTOR (31 downto 0);
 		TaggerOR : in STD_LOGIC_VECTOR(7 downto 0);
@@ -33,21 +34,32 @@ end trigger;
 
 
 architecture RTL of trigger is
+	constant FirmwareType: integer := 2;
+	constant FirmwareRevision: integer := 33;
 
 	subtype sub_Address is std_logic_vector(11 downto 4);
 
 	constant BASE_TRIG_FIXED : sub_Address 					:= x"f0" ; -- r
 	constant BASE_TRIG_SelectedInput_Base : sub_Address 	:= "10000000" ; -- r/w, only bit 11 and bit 10 is used
-	constant TRIG_FIXED : std_logic_vector(31 downto 0) := x"1310241f"; 
+	signal TRIG_FIXED : std_logic_vector(31 downto 0); 
 
+	constant BASE_TRIG_InputChannelDebugLeftStart	 : sub_Address   		:= x"0b"; -- r/w left channel (lower energy) to start with
+	constant BASE_TRIG_InputChannelDebugRightStart	 : sub_Address   		:= x"0c"; -- r/w right channel (higher energy) to start with
+
+	--debug
+	constant BASE_TRIG_Debug_ActualState : sub_Address							:= x"e0"; --r
+	constant BASE_TRIG_SelectedDebugInput_1 : sub_Address						:= x"e1"; --r/w
+	constant BASE_TRIG_SelectedDebugInput_2 : sub_Address						:= x"e2"; --r/w
+	constant BASE_TRIG_SelectedDebugInput_3 : sub_Address						:= x"e3"; --r/w
+	constant BASE_TRIG_SelectedDebugInput_4 : sub_Address						:= x"e4"; --r/w
+	
 	--IN1..IO1 Mask
 	constant BASE_TRIG_IN1Mask : sub_Address    		:= x"10"; -- r/w
 	constant BASE_TRIG_IN2Mask : sub_Address    		:= x"11"; -- r/w
 	constant BASE_TRIG_IN3Mask : sub_Address    		:= x"12"; -- r/w
 	constant BASE_TRIG_IO1Mask : sub_Address    		:= x"13"; -- r/w
 
-	constant BASE_TRIG_InputChannelDebugLeftStart	 : sub_Address   		:= x"0b"; -- r/w left channel (lower energy) to start with
-	constant BASE_TRIG_InputChannelDebugRightStart	 : sub_Address   		:= x"0c"; -- r/w right channel (higher energy) to start with
+	constant BASE_TRIG_ScalerGate : sub_Address    	:= x"20"; -- r/w
 
 	signal IN1IN2IN3IO1Mask : std_logic_vector(32*4-1 downto 0) := x"ffffffffffffffffffffffffffffffff";
 	
@@ -65,13 +77,34 @@ architecture RTL of trigger is
 	signal InputChannelDebugRightGroup : std_logic_vector(NumberOfTDCs-NumberOfLeftChannels-1 downto 0); --The find the matching Moeller Pairs in Debug Mode
 
 
-	---------------------------------------------------------------------------------
-	-- Signals to/from MAMI to control the electron source
-	---------------------------------------------------------------------------------
-	signal MAMIElectronSourceSetting : std_logic_vector(3 downto 0);
-	---------------------------------------------------------------------------------
+	signal ScalerGate : std_logic;
+	
+	-- For all components
+	constant NDebugSignalOutputs : integer := 4;
+	signal SelectedDebugInput : std_logic_vector(8*NDebugSignalOutputs-1 downto 0);
+	signal Debug_ActualState : std_logic_vector(NDebugSignalOutputs-1 downto 0);
+
+	COMPONENT DebugChSelector
+	PORT(
+		DebugSignalsIn : IN std_logic_vector(255 downto 0);
+		SelectedInput : IN std_logic_vector(7 downto 0);          
+		SelectedOutput : OUT std_logic
+		);
+	END COMPONENT;
+
+	------------------------------------------------------------------------------
+
+	
+
 
 begin
+	TRIG_FIXED(31 downto 24) <= CONV_STD_LOGIC_VECTOR(FirmwareType, 8);
+	TRIG_FIXED(23 downto 16) <= CONV_STD_LOGIC_VECTOR(0, 8);
+	TRIG_FIXED(15 downto 0)  <= CONV_STD_LOGIC_VECTOR(FirmwareRevision, 16);
+
+	NIM_OUT <= ScalerGate; --Open Scaler Gate send to NIM OUT and then to all other VUPROMs via NIM IN
+
+
 	InputMaskOut <= IN1IN2IN3IO1Mask;
 
 	------------------------------------------------------------------------------------------------
@@ -100,23 +133,11 @@ begin
 
 	trig_out(15+32 downto 32) <= Inter_trig_out(15 downto 0);
 	trig_out(23+32 downto 16+32) <= TaggerOR;
-	NIM_OUT <= Inter_trig_out(0);
 	------------------------------------------------------------------------------------------------
 	
 	
-	---------------------------------------------------------------------------------
-	-- Signals to/from MAMI to control the electron source
-	---------------------------------------------------------------------------------
-	-- Pin 0 = mami response (+)
-	-- Pin 1 = output from generator (+)
-	-- Pin 2 = inverted output from generator (-)
-	-- Pin 3 = inhibit, if set, status of source is indetermined
---	MAMIElectronSourceSetting <= trig_in(3+32*5 downto 0+32*5); 
-	---------------------------------------------------------------------------------
 		
-		
-		
-		------------------------------------------------------------------------------------------
+	------------------------------------------------------------------------------------------
 	-- Select Left and Right Channels for Debug
 	------------------------------------------------------------------------------------------
 	InputChannelDebugLeftGroup <= 
@@ -174,7 +195,68 @@ begin
 
 		
 		
+	-------------------------------------------------------------------------------------------------
+	-- Debug Selector
 	
+	DebugChSelectors: for i in 0 to NDebugSignalOutputs-1 generate
+	begin
+		Inst_DebugChSelector: DebugChSelector PORT MAP(
+			DebugSignalsIn => DebugSignals,
+			SelectedInput => SelectedDebugInput((i+1)*8-1 downto i*8),
+			SelectedOutput => Debug_ActualState(i)
+		);
+	end generate;
+	trig_out(32+28+NDebugSignalOutputs-1 downto 32+28) <= Debug_ActualState;
+	-------------------------------------------------------------------------------------------------
+
+
+		
+	
+
+	---------------------------------------------------------------------------------------------------------	
+	-- Code for VME handling / access
+	-- handle read commands from vmebus
+	---------------------------------------------------------------------------------------------------------	
+	process(clock50, oecsr, u_ad_reg)
+	begin
+		if (clock50'event and clock50 = '1' and oecsr = '1') then
+			u_data_o <= (others => '0');
+			
+			if (u_ad_reg(11 downto 4) = BASE_TRIG_FIXED) then     	u_data_o <= TRIG_FIXED; end if;
+
+			-- SelectedInputPattern 0..SelectedChannelsCount readout
+			for k in 0 to SelectedChannelsCount-1 loop 
+				for i in 0 to 1 loop --for 2*32ch
+				--for i in 0 to 3 loop --for 4*32ch
+					if (u_ad_reg(11 downto 10) = BASE_TRIG_SelectedInput_Base(11 downto 10)) and (u_ad_reg(9 downto 4) = CONV_STD_LOGIC_VECTOR(k, 6)) and 
+						(u_ad_reg(3 downto 2) = CONV_STD_LOGIC_VECTOR(i, 2)) then 
+							u_data_o(31 downto 0) <= SelectedInputPattern(k)(32*i+31 downto 32*i);
+					end if;
+				end loop;
+			end loop;
+
+			if (u_ad_reg(11 downto 4) = BASE_TRIG_IN1Mask) then 	u_data_o <= IN1IN2IN3IO1Mask(31+32*0 downto 0+32*0); end if;
+			if (u_ad_reg(11 downto 4) = BASE_TRIG_IN2Mask) then 	u_data_o <= IN1IN2IN3IO1Mask(31+32*1 downto 0+32*1); end if;
+			if (u_ad_reg(11 downto 4) = BASE_TRIG_IN3Mask) then 	u_data_o <= IN1IN2IN3IO1Mask(31+32*2 downto 0+32*2); end if;
+			if (u_ad_reg(11 downto 4) = BASE_TRIG_IO1Mask) then 	u_data_o <= IN1IN2IN3IO1Mask(31+32*3 downto 0+32*3); end if;
+			
+			--debug
+			if (u_ad_reg(11 downto 4) =  BASE_TRIG_SelectedDebugInput_1) then 			u_data_o(7 downto 0) <= SelectedDebugInput(8*1-1 downto 8*0); end if;
+			if (u_ad_reg(11 downto 4) =  BASE_TRIG_SelectedDebugInput_2) then 			u_data_o(7 downto 0) <= SelectedDebugInput(8*2-1 downto 8*1); end if;
+			if (u_ad_reg(11 downto 4) =  BASE_TRIG_SelectedDebugInput_3) then 			u_data_o(7 downto 0) <= SelectedDebugInput(8*3-1 downto 8*2); end if;
+			if (u_ad_reg(11 downto 4) =  BASE_TRIG_SelectedDebugInput_4) then 			u_data_o(7 downto 0) <= SelectedDebugInput(8*4-1 downto 8*3); end if;
+			if (u_ad_reg(11 downto 4) =  BASE_TRIG_Debug_ActualState) then 				u_data_o(NDebugSignalOutputs-1 downto 0) <= Debug_ActualState; end if;
+			
+			--Moeller
+			if (u_ad_reg(11 downto 4) = BASE_TRIG_InputChannelDebugLeftStart) then 	u_data_o(7 downto 0) <= InputChannelDebugLeftStart; end if;
+			if (u_ad_reg(11 downto 4) = BASE_TRIG_InputChannelDebugRightStart) then u_data_o(7 downto 0) <= InputChannelDebugRightStart; end if;
+			
+			if (u_ad_reg(11 downto 4) = BASE_TRIG_ScalerGate) then u_data_o(0) <= ScalerGate; end if;
+			
+		end if;
+	end process;
+
+
 	---------------------------------------------------------------------------------------------------------	
 	-- Code for VME handling / access
 	-- decoder for data registers
@@ -208,41 +290,16 @@ begin
 			if (u_ad_reg(11 downto 4) = BASE_TRIG_InputChannelDebugRightStart) and (ckcsr = '1') then 
 				InputChannelDebugRightStart <= u_dat_in(7 downto 0); end if;
 				
+			--debug
+			if ( (ckcsr = '1') and (u_ad_reg(11 downto 4) =  BASE_TRIG_SelectedDebugInput_1) ) then 			SelectedDebugInput(8*1-1 downto 8*0) <= u_dat_in(7 downto 0); end if;
+			if ( (ckcsr = '1') and (u_ad_reg(11 downto 4) =  BASE_TRIG_SelectedDebugInput_2) ) then 			SelectedDebugInput(8*2-1 downto 8*1) <= u_dat_in(7 downto 0); end if;
+			if ( (ckcsr = '1') and (u_ad_reg(11 downto 4) =  BASE_TRIG_SelectedDebugInput_3) ) then 			SelectedDebugInput(8*3-1 downto 8*2) <= u_dat_in(7 downto 0); end if;
+			if ( (ckcsr = '1') and (u_ad_reg(11 downto 4) =  BASE_TRIG_SelectedDebugInput_4) ) then 			SelectedDebugInput(8*4-1 downto 8*3) <= u_dat_in(7 downto 0); end if;
+			
+			if (u_ad_reg(11 downto 4) = BASE_TRIG_ScalerGate) and (ckcsr = '1') then 
+				ScalerGate <= u_dat_in(0); end if;
+
 		end if;
 	end process;
 	
-
-	---------------------------------------------------------------------------------------------------------	
-	-- Code for VME handling / access
-	-- handle read commands from vmebus
-	---------------------------------------------------------------------------------------------------------	
-	process(clock50, oecsr, u_ad_reg)
-	begin
-		if (clock50'event and clock50 = '1' and oecsr = '1') then
-			u_data_o <= (others => '0');
-			
-			if (u_ad_reg(11 downto 4) = BASE_TRIG_FIXED) then     	u_data_o <= TRIG_FIXED; end if;
-
-			-- SelectedInputPattern 0..SelectedChannelsCount readout
-			for k in 0 to SelectedChannelsCount-1 loop 
-				for i in 0 to 1 loop --for 2*32ch
-				--for i in 0 to 3 loop --for 4*32ch
-					if (u_ad_reg(11 downto 10) = BASE_TRIG_SelectedInput_Base(11 downto 10)) and (u_ad_reg(9 downto 4) = CONV_STD_LOGIC_VECTOR(k, 6)) and 
-						(u_ad_reg(3 downto 2) = CONV_STD_LOGIC_VECTOR(i, 2)) then 
-							u_data_o(31 downto 0) <= SelectedInputPattern(k)(32*i+31 downto 32*i);
-					end if;
-				end loop;
-			end loop;
-
-			if (u_ad_reg(11 downto 4) = BASE_TRIG_IN1Mask) then 	u_data_o <= IN1IN2IN3IO1Mask(31+32*0 downto 0+32*0); end if;
-			if (u_ad_reg(11 downto 4) = BASE_TRIG_IN2Mask) then 	u_data_o <= IN1IN2IN3IO1Mask(31+32*1 downto 0+32*1); end if;
-			if (u_ad_reg(11 downto 4) = BASE_TRIG_IN3Mask) then 	u_data_o <= IN1IN2IN3IO1Mask(31+32*2 downto 0+32*2); end if;
-			if (u_ad_reg(11 downto 4) = BASE_TRIG_IO1Mask) then 	u_data_o <= IN1IN2IN3IO1Mask(31+32*3 downto 0+32*3); end if;
-			
-			if (u_ad_reg(11 downto 4) = BASE_TRIG_InputChannelDebugLeftStart) then 	u_data_o(7 downto 0) <= InputChannelDebugLeftStart; end if;
-			if (u_ad_reg(11 downto 4) = BASE_TRIG_InputChannelDebugRightStart) then u_data_o(7 downto 0) <= InputChannelDebugRightStart; end if;
-			
-		end if;
-	end process;
-
 end RTL;

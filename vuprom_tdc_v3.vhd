@@ -590,7 +590,7 @@ begin ---- BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN -------
 	end generate;
 
 	-- EPT
-	RawEPTaggerInputs <= PGIO1X;
+	RawEPTaggerInputs <= not PGIO1X;
 	EPTaggerInputs <= IN1IN2IN3IO1Mask(32*4-1 downto 32*3) and RawEPTaggerInputs;
 	scal_in_OEPT <= EPTaggerInputs;
 	

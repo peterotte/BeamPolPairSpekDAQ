@@ -291,7 +291,7 @@ architecture rtl of vuprom_TaggerScaler is
 	attribute keep of TaggerOR : signal is "TRUE";
 	signal IN1IN2IN3IO1Mask : std_logic_vector(32*4-1 downto 0);
 	signal TaggerInputs, RawTaggerInputs : std_logic_vector(32*3-1 downto 0);
-	signal EPTaggerInputs, RawEPTaggerInputs : std_logic_vector(31 downto 0);
+  signal EPTaggerInputs, EPTaggerInputs_Unordered, RawEPTaggerInputs, RawEPTaggerInputs_Unordered : std_logic_vector(31 downto 0);
 
 	component trigger
 		port (
@@ -589,9 +589,18 @@ begin ---- BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN -------
 			EPTTaggerOR_1: TaggerOR(i+6) <= '1' when (scal_in_OEPT(i*16+15 downto i*16) /= "0") else '0';
 	end generate;
 
-	-- EPT
-	RawEPTaggerInputs <= not PGIO1X;
-	EPTaggerInputs <= IN1IN2IN3IO1Mask(32*4-1 downto 32*3) and RawEPTaggerInputs;
+        -- invert EPT signals
+	RawEPTaggerInputs_Unordered <= not PGIO1X;
+	EPTaggerInputs_Unordered <= IN1IN2IN3IO1Mask(32*4-1 downto 32*3) and RawEPTaggerInputs_Unordered;
+	
+	-- EPT remapping
+	EPTRemapping : for i in 0 to 15 generate
+	begin
+		RawEPTaggerInputs(i) <= RawEPTaggerInputs_Unordered(2*i);
+		RawEPTaggerInputs(i+16) <= RawEPTaggerInputs_Unordered(2*i+1);
+		EPTaggerInputs(i) <= EPTaggerInputs_Unordered(2*i);
+		EPTaggerInputs(i+16) <= EPTaggerInputs_Unordered(2*i+1);
+	end generate;
 	scal_in_OEPT <= EPTaggerInputs;
 	
 	DebugSignals(32*4-1 downto 0) <= RawEPTaggerInputs&RawTaggerInputs;

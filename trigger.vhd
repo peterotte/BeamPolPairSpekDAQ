@@ -35,7 +35,7 @@ end trigger;
 
 architecture RTL of trigger is
 	constant FirmwareType: integer := 2;
-	constant FirmwareRevision: integer := 34;
+	constant FirmwareRevision: integer := 35;
 
 	subtype sub_Address is std_logic_vector(11 downto 4);
 

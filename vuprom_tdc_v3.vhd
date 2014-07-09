@@ -662,23 +662,41 @@ begin ---- BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN -------
 	--     SCALER
 	--+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++--
 
-	scaler_O:    scaler generic map ( NCh => SCCH96 ) port map ( clkl=>clk50, clkh => clk200, scal_in=>scal_in_O, ScalerGate => scal_Gate_Open, 
-			u_ad_reg=>u_ad_reg(11 downto 2), u_dat_in=>u_dat_in, u_data_o=>scal_data_o_O, oecsr=>scal_oecsr_O, ckcsr=>scal_ckcsr_O );
-			
-	scaler_OEPT: scaler generic map ( NCh => SCCH32  ) port map ( clkl=>clk50, clkh => clk200, scal_in=>scal_in_OEPT, ScalerGate => scal_Gate_Open, 
-			u_ad_reg=>u_ad_reg(11 downto 2), u_dat_in=>u_dat_in, u_data_o=>scal_data_o_OEPT, oecsr=>scal_oecsr_OEPT, ckcsr=>scal_ckcsr_OEPT );
-			
-	scaler_D:    scaler generic map ( NCh => SCCH96 ) port map ( clkl=>clk50, clkh => clk200, scal_in=>scal_in_D, ScalerGate => scal_Gate_PairSpec, 
-			u_ad_reg=>u_ad_reg(11 downto 2), u_dat_in=>u_dat_in, u_data_o=>scal_data_o_D, oecsr=>scal_oecsr_D, ckcsr=>scal_ckcsr_D );
-			
-	scaler_U:    scaler generic map ( NCh => SCCH96 ) port map ( clkl=>clk50, clkh => clk200, scal_in=>scal_in_O, ScalerGate => scal_Gate_PairSpec, 
-			u_ad_reg=>u_ad_reg(11 downto 2), u_dat_in=>u_dat_in, u_data_o=>scal_data_o_U, oecsr=>scal_oecsr_U, ckcsr=>scal_ckcsr_U );
-			
-	scaler_Mon:  scaler generic map ( NCh => SCCHMon  ) port map ( clkl=>clk50, clkh => clk100, scal_in=>scal_in_Mon, ScalerGate => '1', 
-			u_ad_reg=>u_ad_reg(11 downto 2), u_dat_in=>u_dat_in, u_data_o=>scal_data_o_Mon, oecsr=>scal_oecsr_Mon, ckcsr=>scal_ckcsr_Mon );
+	scaler_O : scaler
+		generic map (NCh => SCCH96)
+		port map (clkl		 => clk50, clkh => clk200, scal_in => scal_in_O, ScalerGate => scal_Gate_Open,
+							u_ad_reg => u_ad_reg(11 downto 2), u_dat_in => u_dat_in, u_data_o => scal_data_o_O,
+							oecsr		 => scal_oecsr_O, ckcsr => scal_ckcsr_O);
 
-	scaler_DAQMon:  scaler generic map ( NCh => SCCHMon  ) port map ( clkl=>clk50, clkh => clk100, scal_in=>scal_in_Mon, ScalerGate => scal_Gate_Open, 
-			u_ad_reg=>u_ad_reg(11 downto 2), u_dat_in=>u_dat_in, u_data_o=>scal_data_o_DAQMon, oecsr=>scal_oecsr_DAQMon, ckcsr=>scal_ckcsr_DAQMon );
+	scaler_OEPT : scaler
+		generic map (NCh => SCCH32)
+		port map (clkl		 => clk50, clkh => clk200, scal_in => scal_in_OEPT, ScalerGate => scal_Gate_Open,
+							u_ad_reg => u_ad_reg(11 downto 2), u_dat_in => u_dat_in, u_data_o => scal_data_o_OEPT,
+							oecsr		 => scal_oecsr_OEPT, ckcsr => scal_ckcsr_OEPT);
+
+	scaler_D : scaler
+		generic map (NCh => SCCH96)
+		port map (clkl		 => clk50, clkh => clk200, scal_in => scal_in_D, ScalerGate => scal_Gate_PairSpec,
+							u_ad_reg => u_ad_reg(11 downto 2), u_dat_in => u_dat_in, u_data_o => scal_data_o_D,
+							oecsr		 => scal_oecsr_D, ckcsr => scal_ckcsr_D);
+
+	scaler_U : scaler
+		generic map (NCh => SCCH96)
+		port map (clkl		 => clk50, clkh => clk200, scal_in => scal_in_O, ScalerGate => scal_Gate_PairSpec,
+							u_ad_reg => u_ad_reg(11 downto 2), u_dat_in => u_dat_in, u_data_o => scal_data_o_U,
+							oecsr		 => scal_oecsr_U, ckcsr => scal_ckcsr_U);
+
+	scaler_Mon : scaler
+		generic map (NCh => SCCHMon)
+		port map (clkl		 => clk50, clkh => clk100, scal_in => scal_in_Mon, ScalerGate => '1',
+							u_ad_reg => u_ad_reg(11 downto 2), u_dat_in => u_dat_in, u_data_o => scal_data_o_Mon,
+							oecsr		 => scal_oecsr_Mon, ckcsr => scal_ckcsr_Mon);
+
+	scaler_DAQMon : scaler
+		generic map (NCh => SCCHMon)
+		port map (clkl		 => clk50, clkh => clk100, scal_in => scal_in_Mon, ScalerGate => scal_Gate_Open,
+							u_ad_reg => u_ad_reg(11 downto 2), u_dat_in => u_dat_in, u_data_o => scal_data_o_DAQMon,
+							oecsr		 => scal_oecsr_DAQMon, ckcsr => scal_ckcsr_DAQMon);
 
 	
 	

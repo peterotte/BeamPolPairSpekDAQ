@@ -117,8 +117,11 @@ architecture rtl of vuprom_TaggerScaler is
 	----- address sharing for vmecsr address bus (19 downto 12)
 	constant scal_base_O    : std_logic_vector(7 downto 0) :=x"10";
 	constant scal_base_OEPT : std_logic_vector(7 downto 0) :=x"11";
-	constant scal_base_D    : std_logic_vector(7 downto 0) :=x"12";
-	constant scal_base_U    : std_logic_vector(7 downto 0) :=x"13";
+  constant scal_base_D    : std_logic_vector(7 downto 0) :=x"12";
+  constant scal_base_DEPT : std_logic_vector(7 downto 0) :=x"16";
+  constant scal_base_U    : std_logic_vector(7 downto 0) :=x"13";
+  constant scal_base_UEPT : std_logic_vector(7 downto 0) :=x"17";
+   
 	constant scal_base_Mon  : std_logic_vector(7 downto 0) :=x"14";
 	constant scal_base_DAQMon  : std_logic_vector(7 downto 0) :=x"15";
 	constant trig_base      : std_logic_vector(7 downto 0) :=x"02";
@@ -240,10 +243,13 @@ architecture rtl of vuprom_TaggerScaler is
 	signal scal_Gate_Open, scal_Gate_PairSpec : std_logic;
 	attribute keep of scal_Gate_PairSpec : signal is "TRUE";
 	--intermediate signals
-	signal scal_data_o_O, scal_data_o_OEPT, scal_data_o_D, scal_data_o_U, scal_data_o_Mon, scal_data_o_DAQMon : std_logic_vector(31 downto 0);
+  signal scal_data_o_O, scal_data_o_OEPT, scal_data_o_D, scal_data_o_DEPT,
+	  scal_data_o_U, scal_data_o_UEPT, scal_data_o_Mon, scal_data_o_DAQMon : std_logic_vector(31 downto 0);
 	
-	signal scal_oecsr_O, scal_oecsr_OEPT, scal_oecsr_D, scal_oecsr_U, scal_oecsr_Mon, scal_oecsr_DAQMon : std_logic;
-	signal scal_ckcsr_O, scal_ckcsr_OEPT, scal_ckcsr_D, scal_ckcsr_U, scal_ckcsr_Mon, scal_ckcsr_DAQMon : std_logic;
+  signal scal_oecsr_O, scal_oecsr_OEPT, scal_oecsr_D, scal_oecsr_DEPT,
+	  scal_oecsr_U, scal_oecsr_UEPT, scal_oecsr_Mon, scal_oecsr_DAQMon : std_logic;
+  signal scal_ckcsr_O, scal_ckcsr_OEPT, scal_ckcsr_D, scal_ckcsr_DEPT,
+	  scal_ckcsr_U, scal_ckcsr_UEPT, scal_ckcsr_Mon, scal_ckcsr_DAQMon : std_logic;
 	
 	constant SCBit: integer := 32;
 	constant SCCH96: integer := 32*3; --For open Tagger, Pair Spec delayed, Pair Spec undelayed
@@ -253,7 +259,7 @@ architecture rtl of vuprom_TaggerScaler is
 	attribute keep of scal_in_O : signal is "TRUE";
 	attribute keep of scal_in_D : signal is "TRUE";
 
-	signal scal_in_OEPT : std_logic_vector(SCCH32-1 downto 0);
+  signal scal_in_OEPT, scal_in_DEPT : std_logic_vector(SCCH32-1 downto 0);
 	signal scal_in_Mon : std_logic_vector(SCCHMon-1 downto 0);
 	attribute keep of scal_in_Mon : signal is "TRUE";
 	
@@ -472,7 +478,8 @@ begin ---- BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN -------
 
 ----------------------- DATA  for OUTPUT to VME -------------------------------------------
 
-		process(clk50, scal_oecsr_O, scal_oecsr_OEPT, scal_oecsr_D, scal_oecsr_U, scal_oecsr_Mon, scal_oecsr_DAQMon, trig_oecsr, top_oecsr)
+	process(clk50, scal_oecsr_O, scal_oecsr_OEPT, scal_oecsr_D, scal_oecsr_DEPT,
+	        scal_oecsr_U, scal_oecsr_UEPT, scal_oecsr_Mon, scal_oecsr_DAQMon, trig_oecsr, top_oecsr)
 		begin
    			if (rising_edge(clk50)) then   
 					if (scal_oecsr_O ='1' ) then
@@ -481,8 +488,12 @@ begin ---- BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN -------
 							din <= scal_data_o_OEPT;
 					elsif (scal_oecsr_D ='1' ) then
 							din <= scal_data_o_D;
+					elsif (scal_oecsr_DEPT ='1' ) then
+						din <= scal_data_o_DEPT;						
 					elsif (scal_oecsr_U ='1' ) then
 							din <= scal_data_o_U;
+					elsif (scal_oecsr_UEPT ='1' ) then
+						din <= scal_data_o_UEPT;						
 					elsif (scal_oecsr_Mon ='1' ) then
 							din <= scal_data_o_Mon;
 					elsif (scal_oecsr_DAQMon ='1' ) then
@@ -589,7 +600,7 @@ begin ---- BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN -------
 			EPTTaggerOR_1: TaggerOR(i+6) <= '1' when (scal_in_OEPT(i*16+15 downto i*16) /= "0") else '0';
 	end generate;
 
-        -- invert EPT signals
+  -- invert EPT signals
 	RawEPTaggerInputs_Unordered <= not PGIO1X;
 	EPTaggerInputs_Unordered <= IN1IN2IN3IO1Mask(32*4-1 downto 32*3) and RawEPTaggerInputs_Unordered;
 	
@@ -602,10 +613,22 @@ begin ---- BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN -------
 		EPTaggerInputs(i+16) <= EPTaggerInputs_Unordered(2*i+1);
 	end generate;
 	scal_in_OEPT <= EPTaggerInputs;
+
+	DelayboxesEPT: for i in 0 to 31 generate --INOUT1
+	begin
+		delay_by_shiftregister_EPT_1: delay_by_shiftregister
+			Generic MAP (	DELAY => 27 )  -- Delay not checked yet! 																																		
+			Port Map ( CLK => clk200,
+			           SIG_IN => scal_in_OEPT(i),
+			           DELAY_OUT => scal_in_DEPT(i)
+			           );
+	end generate;
 	
-	DebugSignals(32*4-1 downto 0) <= RawEPTaggerInputs&RawTaggerInputs;
+	
+	DebugSignals(32*4-1 downto 0) <= RawEPTaggerInputs & RawTaggerInputs;
 	DebugSignals(32*5-1 downto 32*4) <= PGIO3X;
 	DebugSignals(15+32*5 downto 32*5) <= scal_in_D(15 downto 0);
+	DebugSignals(31+32*5 downto 32*5+16) <= scal_in_DEPT(15 downto 0);
 	
 	--PairSpec
 	PairSpecSignal <= PGIO3X(7); --IO3, ch6
@@ -680,12 +703,25 @@ begin ---- BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN -------
 							u_ad_reg => u_ad_reg(11 downto 2), u_dat_in => u_dat_in, u_data_o => scal_data_o_D,
 							oecsr		 => scal_oecsr_D, ckcsr => scal_ckcsr_D);
 
+	scaler_DEPT : scaler
+		generic map (NCh => SCCH32)
+		port map (clkl		 => clk50, clkh => clk200, scal_in => scal_in_DEPT, ScalerGate => scal_Gate_PairSpec,
+		          u_ad_reg => u_ad_reg(11 downto 2), u_dat_in => u_dat_in, u_data_o => scal_data_o_DEPT,
+		          oecsr		 => scal_oecsr_DEPT, ckcsr => scal_ckcsr_DEPT);
+
 	scaler_U : scaler
 		generic map (NCh => SCCH96)
 		port map (clkl		 => clk50, clkh => clk200, scal_in => scal_in_O, ScalerGate => scal_Gate_PairSpec,
 							u_ad_reg => u_ad_reg(11 downto 2), u_dat_in => u_dat_in, u_data_o => scal_data_o_U,
 							oecsr		 => scal_oecsr_U, ckcsr => scal_ckcsr_U);
 
+	scaler_UEPT : scaler
+		generic map (NCh => SCCH32)
+		port map (clkl		 => clk50, clkh => clk200, scal_in => scal_in_OEPT, ScalerGate => scal_Gate_PairSpec,
+		          u_ad_reg => u_ad_reg(11 downto 2), u_dat_in => u_dat_in, u_data_o => scal_data_o_UEPT,
+		          oecsr		 => scal_oecsr_UEPT, ckcsr => scal_ckcsr_UEPT);
+
+	
 	scaler_Mon : scaler
 		generic map (NCh => SCCHMon)
 		port map (clkl		 => clk50, clkh => clk100, scal_in => scal_in_Mon, ScalerGate => '1',
@@ -713,9 +749,15 @@ begin ---- BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN -------
 			if (oecsr = '1' and u_ad_reg(19 downto 12) = scal_base_D)    then scal_oecsr_D <='1'; else scal_oecsr_D <='0'; end if;
 			if (ckcsr = '1' and u_ad_reg(19 downto 12) = scal_base_D)    then scal_ckcsr_D <='1'; else scal_ckcsr_D <='0';	end if;	
 
+			if (oecsr = '1' and u_ad_reg(19 downto 12) = scal_base_DEPT) then scal_oecsr_DEPT <='1'; else scal_oecsr_DEPT <='0'; end if;
+			if (ckcsr = '1' and u_ad_reg(19 downto 12) = scal_base_DEPT) then scal_ckcsr_DEPT <='1'; else scal_ckcsr_DEPT <='0';	end if;	
+			
 			if (oecsr = '1' and u_ad_reg(19 downto 12) = scal_base_U)    then scal_oecsr_U <='1'; else scal_oecsr_U <='0'; end if;
 			if (ckcsr = '1' and u_ad_reg(19 downto 12) = scal_base_U)    then scal_ckcsr_U <='1'; else scal_ckcsr_U <='0';	end if;	
 
+			if (oecsr = '1' and u_ad_reg(19 downto 12) = scal_base_UEPT) then scal_oecsr_UEPT <='1'; else scal_oecsr_UEPT <='0'; end if;
+			if (ckcsr = '1' and u_ad_reg(19 downto 12) = scal_base_UEPT) then scal_ckcsr_UEPT <='1'; else scal_ckcsr_UEPT <='0';	end if;	
+			
 			if (oecsr = '1' and u_ad_reg(19 downto 12) = scal_base_Mon)  then scal_oecsr_Mon <='1'; else scal_oecsr_Mon <='0'; end if;
 			if (ckcsr = '1' and u_ad_reg(19 downto 12) = scal_base_Mon)  then scal_ckcsr_Mon <='1'; else scal_ckcsr_Mon <='0';	end if;	
 

@@ -24,6 +24,7 @@ entity trigger is
 		Global_Reset_After_Power_Up : in std_logic;
 		VN2andVN1 : in std_logic_vector(7 downto 0);
 		AdditionalCountersOut : out std_logic_vector(31 downto 0); --0..3 for e- Flux Mesaurement
+		UseEPT_out : out std_logic;
 		-- VME interface ------------------------------------------------------
 		u_ad_reg :in std_logic_vector(11 downto 2);
 		u_dat_in :in std_logic_vector(31 downto 0);
@@ -35,7 +36,7 @@ end trigger;
 
 architecture RTL of trigger is
 	constant FirmwareType: integer := 2;
-	constant FirmwareRevision: integer := 35;
+	constant FirmwareRevision: integer := 36;
 
 	subtype sub_Address is std_logic_vector(11 downto 4);
 
@@ -60,6 +61,7 @@ architecture RTL of trigger is
 	constant BASE_TRIG_IO1Mask : sub_Address    		:= x"13"; -- r/w
 
 	constant BASE_TRIG_ScalerGate : sub_Address    	:= x"20"; -- r/w
+	constant BASE_TRIG_UseEPT     : sub_Address    	:= x"21"; -- r/w
 
 	signal IN1IN2IN3IO1Mask : std_logic_vector(32*4-1 downto 0) := x"ffffffffffffffffffffffffffffffff";
 	
@@ -78,6 +80,7 @@ architecture RTL of trigger is
 
 
 	signal ScalerGate : std_logic;
+	signal UseEPT     : std_logic := '0';
 	
 	-- For all components
 	constant NDebugSignalOutputs : integer := 4;
@@ -104,7 +107,9 @@ begin
 
 	NIM_OUT <= ScalerGate; --Open Scaler Gate send to NIM OUT and then to all other VUPROMs via NIM IN
 
-
+	UseEPT_out <= UseEPT; -- controls the multiplexer to switch from Tagger to
+												-- EPT mode for scaler block inputs
+	
 	InputMaskOut <= IN1IN2IN3IO1Mask;
 
 	------------------------------------------------------------------------------------------------
@@ -252,6 +257,8 @@ begin
 			if (u_ad_reg(11 downto 4) = BASE_TRIG_InputChannelDebugRightStart) then u_data_o(7 downto 0) <= InputChannelDebugRightStart; end if;
 			
 			if (u_ad_reg(11 downto 4) = BASE_TRIG_ScalerGate) then u_data_o(0) <= ScalerGate; end if;
+
+			if (u_ad_reg(11 downto 4) = BASE_TRIG_UseEPT) then u_data_o(0) <= UseEPT; end if;
 			
 		end if;
 	end process;
@@ -296,8 +303,8 @@ begin
 			if ( (ckcsr = '1') and (u_ad_reg(11 downto 4) =  BASE_TRIG_SelectedDebugInput_3) ) then 			SelectedDebugInput(8*3-1 downto 8*2) <= u_dat_in(7 downto 0); end if;
 			if ( (ckcsr = '1') and (u_ad_reg(11 downto 4) =  BASE_TRIG_SelectedDebugInput_4) ) then 			SelectedDebugInput(8*4-1 downto 8*3) <= u_dat_in(7 downto 0); end if;
 			
-			if (u_ad_reg(11 downto 4) = BASE_TRIG_ScalerGate) and (ckcsr = '1') then 
-				ScalerGate <= u_dat_in(0); end if;
+			if (u_ad_reg(11 downto 4) = BASE_TRIG_ScalerGate) and (ckcsr = '1') then ScalerGate <= u_dat_in(0); end if;
+			if (u_ad_reg(11 downto 4) = BASE_TRIG_UseEPT) and (ckcsr = '1') then UseEPT <= u_dat_in(0); end if;
 
 		end if;
 	end process;

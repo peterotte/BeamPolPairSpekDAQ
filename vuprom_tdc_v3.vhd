@@ -116,7 +116,6 @@ architecture rtl of vuprom_TaggerScaler is
 
 	----- address sharing for vmecsr address bus (19 downto 12)
 	constant scal_base_O    : std_logic_vector(7 downto 0) :=x"10";
-	constant scal_base_OEPT : std_logic_vector(7 downto 0) :=x"11";
 	constant scal_base_D    : std_logic_vector(7 downto 0) :=x"12";
 	constant scal_base_U    : std_logic_vector(7 downto 0) :=x"13";
 	constant scal_base_Mon  : std_logic_vector(7 downto 0) :=x"14";
@@ -240,10 +239,10 @@ architecture rtl of vuprom_TaggerScaler is
 	signal scal_Gate_Open, scal_Gate_PairSpec : std_logic;
 	attribute keep of scal_Gate_PairSpec : signal is "TRUE";
 	--intermediate signals
-	signal scal_data_o_O, scal_data_o_OEPT, scal_data_o_D, scal_data_o_U, scal_data_o_Mon, scal_data_o_DAQMon : std_logic_vector(31 downto 0);
+	signal scal_data_o_O, scal_data_o_D, scal_data_o_U, scal_data_o_Mon, scal_data_o_DAQMon : std_logic_vector(31 downto 0);
 	
-	signal scal_oecsr_O, scal_oecsr_OEPT, scal_oecsr_D, scal_oecsr_U, scal_oecsr_Mon, scal_oecsr_DAQMon : std_logic;
-	signal scal_ckcsr_O, scal_ckcsr_OEPT, scal_ckcsr_D, scal_ckcsr_U, scal_ckcsr_Mon, scal_ckcsr_DAQMon : std_logic;
+	signal scal_oecsr_O, scal_oecsr_D, scal_oecsr_U, scal_oecsr_Mon, scal_oecsr_DAQMon : std_logic;
+	signal scal_ckcsr_O, scal_ckcsr_D, scal_ckcsr_U, scal_ckcsr_Mon, scal_ckcsr_DAQMon : std_logic;
 	
 	constant SCBit: integer := 32;
 	constant SCCH96: integer := 32*3; --For open Tagger, Pair Spec delayed, Pair Spec undelayed
@@ -253,7 +252,7 @@ architecture rtl of vuprom_TaggerScaler is
 	attribute keep of scal_in_O : signal is "TRUE";
 	attribute keep of scal_in_D : signal is "TRUE";
 
-	signal scal_in_OEPT : std_logic_vector(SCCH32-1 downto 0);
+	
 	signal scal_in_Mon : std_logic_vector(SCCHMon-1 downto 0);
 	attribute keep of scal_in_Mon : signal is "TRUE";
 	
@@ -290,9 +289,12 @@ architecture rtl of vuprom_TaggerScaler is
 	signal TaggerOR : std_logic_vector(7 downto 0);
 	attribute keep of TaggerOR : signal is "TRUE";
 	signal IN1IN2IN3IO1Mask : std_logic_vector(32*4-1 downto 0);
-	signal TaggerInputs, RawTaggerInputs : std_logic_vector(32*3-1 downto 0);
-  signal EPTaggerInputs, EPTaggerInputs_Unordered, RawEPTaggerInputs, RawEPTaggerInputs_Unordered : std_logic_vector(31 downto 0);
+  signal TaggerInputs, RawTaggerInputs, TaggerInputs_Delayed : std_logic_vector(32*3-1 downto 0);
+  signal EPTaggerInputs, EPTaggerInputs_Unordered, EPTaggerInputs_Delayed,
+	  RawEPTaggerInputs, RawEPTaggerInputs_Unordered : std_logic_vector(31 downto 0);
 
+  signal UseEPT : std_logic; -- set by trigger unit
+   
 	component trigger
 		port (
 			clock50 : in STD_LOGIC;
@@ -312,6 +314,7 @@ architecture rtl of vuprom_TaggerScaler is
 			Global_Reset_After_Power_Up : in std_logic;
 			VN2andVN1 : in std_logic_vector(7 downto 0);
 			AdditionalCountersOut : out std_logic_vector(31 downto 0);
+			UseEPT_out : out std_logic;
 			--............................. vme interface ....................
 			u_ad_reg :in std_logic_vector(11 downto 2);
 			u_dat_in :in std_logic_vector(31 downto 0);
@@ -472,13 +475,11 @@ begin ---- BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN -------
 
 ----------------------- DATA  for OUTPUT to VME -------------------------------------------
 
-		process(clk50, scal_oecsr_O, scal_oecsr_OEPT, scal_oecsr_D, scal_oecsr_U, scal_oecsr_Mon, scal_oecsr_DAQMon, trig_oecsr, top_oecsr)
+		process(clk50, scal_oecsr_O, scal_oecsr_D, scal_oecsr_U, scal_oecsr_Mon, scal_oecsr_DAQMon, trig_oecsr, top_oecsr)
 		begin
    			if (rising_edge(clk50)) then   
 					if (scal_oecsr_O ='1' ) then
 							din <= scal_data_o_O;
-					elsif (scal_oecsr_OEPT ='1' ) then
-							din <= scal_data_o_OEPT;
 					elsif (scal_oecsr_D ='1' ) then
 							din <= scal_data_o_D;
 					elsif (scal_oecsr_U ='1' ) then
@@ -568,28 +569,28 @@ begin ---- BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN -------
 	-- Tagger
 	RawTaggerInputs <= IN3X ( 32 downto 1) & IN2X ( 32 downto 1) & IN1X (32 downto 1); --free:PGIO2X ( 32 downto 1)
 	TaggerInputs <= IN1IN2IN3IO1Mask(32*3-1 downto 0) and RawTaggerInputs;
-	scal_in_O <= TaggerInputs;
 
 	Delayboxes: for i in 0 to 3*32-1 generate --IN1, IN2, IN3
 	begin
 		delay_by_shiftregister_1: delay_by_shiftregister Generic MAP (	DELAY => 27 ) --Delay correct: 33, 9.10.2012
-			 Port Map ( CLK => clk200,
-					  SIG_IN => scal_in_O(i),
-					  DELAY_OUT => scal_in_D(i)
+			 Port Map (
+				 CLK => clk200,
+				 SIG_IN => TaggerInputs(i),
+				 DELAY_OUT => TaggerInputs_Delayed(i)
 			);
 	end generate;
 	
-	--Tagger OR
+	-- Tagger/EPT OR
 	TaggerORs1: for i in 0 to 5 generate
 		begin
-			TaggerOR_1: TaggerOR(i) <= '1' when (scal_in_O(i*16+15 downto i*16) /= "0") else '0';
+			TaggerOR_1: TaggerOR(i) <= '1' when (TaggerInputs(i*16+15 downto i*16) /= "0") else '0';
 	end generate;
 	TaggerORsEPT: for i in 0 to 1 generate
 		begin
-			EPTTaggerOR_1: TaggerOR(i+6) <= '1' when (scal_in_OEPT(i*16+15 downto i*16) /= "0") else '0';
+			EPTTaggerOR_1: TaggerOR(i+6) <= '1' when (EPTaggerInputs(i*16+15 downto i*16) /= "0") else '0';
 	end generate;
 
-        -- invert EPT signals
+  -- invert EPT signals
 	RawEPTaggerInputs_Unordered <= not PGIO1X;
 	EPTaggerInputs_Unordered <= IN1IN2IN3IO1Mask(32*4-1 downto 32*3) and RawEPTaggerInputs_Unordered;
 	
@@ -601,8 +602,20 @@ begin ---- BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN -------
 		EPTaggerInputs(i) <= EPTaggerInputs_Unordered(2*i);
 		EPTaggerInputs(i+16) <= EPTaggerInputs_Unordered(2*i+1);
 	end generate;
-	scal_in_OEPT <= EPTaggerInputs;
+
+	DelayboxesEPT: for i in 0 to 31 generate 
+	begin
+		delay_by_shiftregister_1: delay_by_shiftregister
+			Generic MAP (	DELAY => 27 ) -- delay not measured yet  
+			Port Map (
+				CLK => clk200,
+				SIG_IN => EPTaggerInputs(i),
+				DELAY_OUT => EPTaggerInputs_Delayed(i)
+			);
+	end generate;
+
 	
+	-- debug signals
 	DebugSignals(32*4-1 downto 0) <= RawEPTaggerInputs&RawTaggerInputs;
 	DebugSignals(32*5-1 downto 32*4) <= PGIO3X;
 	DebugSignals(15+32*5 downto 32*5) <= scal_in_D(15 downto 0);
@@ -662,18 +675,24 @@ begin ---- BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN -------
 	--     SCALER
 	--+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++--
 
+	mux_tagger_or_EPT : process(UseEPT)
+	begin
+		if UseEPT = '1' then
+			scal_in_O(31 downto 0)  <= EPTaggerInputs;
+			scal_in_O(95 downto 32) <= (others =>'0');
+			scal_in_D(31 downto 0)  <= EPTaggerInputs_Delayed;
+			scal_in_D(95 downto 32) <= (others =>'0');
+		else
+			scal_in_O <= TaggerInputs;
+			scal_in_D <= TaggerInputs_Delayed;
+		end if;
+	end process;	
+	
 	scaler_O : scaler
 		generic map (NCh => SCCH96)
 		port map (clkl		 => clk50, clkh => clk200, scal_in => scal_in_O, ScalerGate => scal_Gate_Open,
 							u_ad_reg => u_ad_reg(11 downto 2), u_dat_in => u_dat_in, u_data_o => scal_data_o_O,
 							oecsr		 => scal_oecsr_O, ckcsr => scal_ckcsr_O);
-
-	scaler_OEPT : scaler
-		generic map (NCh => SCCH32)
-		port map (clkl		 => clk50, clkh => clk200, scal_in => scal_in_OEPT, ScalerGate => scal_Gate_Open,
-							u_ad_reg => u_ad_reg(11 downto 2), u_dat_in => u_dat_in, u_data_o => scal_data_o_OEPT,
-							oecsr		 => scal_oecsr_OEPT, ckcsr => scal_ckcsr_OEPT);
-
 	scaler_D : scaler
 		generic map (NCh => SCCH96)
 		port map (clkl		 => clk50, clkh => clk200, scal_in => scal_in_D, ScalerGate => scal_Gate_PairSpec,
@@ -706,9 +725,6 @@ begin ---- BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN -------
 		--scaler--
 			if (oecsr = '1' and u_ad_reg(19 downto 12) = scal_base_O)    then scal_oecsr_O <='1'; else scal_oecsr_O <='0'; end if;
 			if (ckcsr = '1' and u_ad_reg(19 downto 12) = scal_base_O)    then scal_ckcsr_O <='1'; else scal_ckcsr_O <='0';	end if;	
-
-			if (oecsr = '1' and u_ad_reg(19 downto 12) = scal_base_OEPT) then scal_oecsr_OEPT <='1'; else scal_oecsr_OEPT <='0'; end if;
-			if (ckcsr = '1' and u_ad_reg(19 downto 12) = scal_base_OEPT) then scal_ckcsr_OEPT <='1'; else scal_ckcsr_OEPT <='0';	end if;	
 
 			if (oecsr = '1' and u_ad_reg(19 downto 12) = scal_base_D)    then scal_oecsr_D <='1'; else scal_oecsr_D <='0'; end if;
 			if (ckcsr = '1' and u_ad_reg(19 downto 12) = scal_base_D)    then scal_ckcsr_D <='1'; else scal_ckcsr_D <='0';	end if;	
@@ -747,6 +763,7 @@ begin ---- BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN -------
 			Global_Reset_After_Power_Up => Global_Reset_After_Power_Up_Delay_1msec,
 			VN2andVN1 => VN2andVN1,
 			AdditionalCountersOut => AdditionalCountersOut,
+			UseEPT_out => UseEPT,
 			u_ad_reg=>u_ad_reg(11 downto 2), 
 			u_dat_in=>u_dat_in, 
 			u_data_o=>trig_data_o,

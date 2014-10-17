@@ -606,7 +606,7 @@ begin ---- BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN  BEGIN -------
 	DelayboxesEPT: for i in 0 to 31 generate 
 	begin
 		delay_by_shiftregister_1: delay_by_shiftregister
-			Generic MAP (	DELAY => 27 ) -- delay not measured yet  
+			Generic MAP (	DELAY => 22 ) -- measured with OsziHisto of Exptrigger vuprom  
 			Port Map (
 				CLK => clk200,
 				SIG_IN => EPTaggerInputs(i),
